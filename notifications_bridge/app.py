@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw
 from notifications_bridge.config_loader import ensure_config_exists, load_config
 from notifications_bridge.graph_auth import acquire_token, build_msal_app, sign_out
 from notifications_bridge.graph_poll import format_toast, latest_message, list_chats
+from notifications_bridge.mini_cli import MiniCliWindow
 from notifications_bridge.paths import (
     app_data_dir,
     config_path,
@@ -23,6 +24,7 @@ from notifications_bridge.paths import (
     state_path as state_file_path,
     token_cache_path,
 )
+from notifications_bridge.runtime import AppRuntime
 from notifications_bridge.state_store import AppState
 from notifications_bridge.toast_service import ToastService
 
@@ -30,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 _stop = threading.Event()
 _poll_thread: threading.Thread | None = None
+_last_poll_ok_at: float | None = None
 
 
 def _setup_logging() -> None:
@@ -47,10 +50,18 @@ def _setup_logging() -> None:
 
 
 def _tray_image() -> Image.Image:
-    img = Image.new("RGB", (64, 64), (0, 120, 212))
+    """Monitor-style tray icon: screen + accent dot (pink, not yellow)."""
+    img = Image.new("RGB", (64, 64), (28, 28, 30))
     d = ImageDraw.Draw(img)
-    d.rectangle((12, 12, 51, 51), outline=(255, 255, 255), width=2)
-    d.text((24, 18), "T", fill=(255, 255, 255))
+    # stand
+    d.rectangle((26, 54, 37, 58), fill=(72, 72, 76))
+    # bezel
+    d.rounded_rectangle((6, 8, 57, 48), radius=5, fill=(52, 52, 56))
+    # screen (cool neutral; was easy to tint yellow on some themes)
+    d.rounded_rectangle((11, 13, 52, 43), radius=3, fill=(225, 232, 242))
+    # notification badge — pink instead of classic yellow dot
+    pink = (236, 72, 153)
+    d.ellipse((40, 30, 52, 42), fill=pink, outline=(255, 182, 218), width=1)
     return img
 
 
@@ -133,9 +144,11 @@ def _poll_cycle(app, cache_path, notifier: Any, state_file: Path) -> None:
 
 
 def _poll_loop(app, cache_path, notifier: Any, interval: int) -> None:
+    global _last_poll_ok_at
     while not _stop.is_set():
         try:
             _poll_cycle(app, cache_path, notifier, state_file_path())
+            _last_poll_ok_at = time.time()
         except requests.HTTPError as e:
             resp = e.response
             if resp is not None and resp.status_code == 401:
@@ -162,18 +175,20 @@ def _start_background_poll(app, cache_path, notifier: Any, interval: int) -> Non
     _poll_thread.start()
 
 
-def run_tray(cfg: dict, notifier: Any, tk_root: Any | None) -> None:
-    cache_path = token_cache_path()
-    msal_app = build_msal_app(cfg["client_id"], cfg["tenant_id"], cache_path)
+def run_tray(rt: AppRuntime) -> None:
+    cfg = rt.cfg
+    notifier = rt.notifier
+    tk_root = rt.root
+    msal_app = rt.msal_app
+    cache_path = rt.cache_path
 
     def on_quit(icon, _item) -> None:
         _stop.set()
         icon.stop()
-        if tk_root is not None:
-            try:
-                tk_root.after(0, tk_root.quit)
-            except Exception:
-                logger.exception("Failed to stop Tk root")
+        try:
+            tk_root.after(0, tk_root.quit)
+        except Exception:
+            logger.exception("Failed to stop Tk root")
 
     def on_sign_out(_icon, _item) -> None:
         try:
@@ -196,7 +211,12 @@ def run_tray(cfg: dict, notifier: Any, tk_root: Any | None) -> None:
             "https://github.com/AzureAD/microsoft-authentication-library-for-python/wiki"
         )
 
+    def on_cli(_icon, _item) -> None:
+        MiniCliWindow.open_or_focus(rt)
+
     menu = pystray.Menu(
+        pystray.MenuItem("Mini CLI…", on_cli),
+        pystray.Menu.SEPARATOR,
         pystray.MenuItem("Open data folder", on_open_data),
         pystray.MenuItem("Edit config.json", on_open_config),
         pystray.MenuItem("Sign out", on_sign_out),
@@ -230,13 +250,17 @@ def main() -> None:
     ensure_config_exists()
     cfg = load_config()
 
-    if cfg["use_top_overlay"]:
-        import tkinter as tk
+    import tkinter as tk
 
+    root = tk.Tk()
+    root.withdraw()
+
+    cache_path = token_cache_path()
+    msal_app = build_msal_app(cfg["client_id"], cfg["tenant_id"], cache_path)
+
+    if cfg["use_top_overlay"]:
         from notifications_bridge.top_overlay import TopOverlayManager
 
-        root = tk.Tk()
-        root.withdraw()
         notifier = TopOverlayManager(
             root,
             width=cfg["overlay_width"],
@@ -246,12 +270,9 @@ def main() -> None:
             enter_ms=cfg["overlay_enter_ms"],
             exit_ms=cfg["overlay_exit_ms"],
         )
-        threading.Thread(
-            target=lambda: run_tray(cfg, notifier, root),
-            daemon=True,
-            name="tray",
-        ).start()
-        root.mainloop()
     else:
         notifier = ToastService(cfg["toast_app_id"])
-        run_tray(cfg, notifier, None)
+
+    rt = AppRuntime(cfg=cfg, notifier=notifier, root=root, msal_app=msal_app, cache_path=cache_path)
+    threading.Thread(target=lambda: run_tray(rt), daemon=True, name="tray").start()
+    root.mainloop()

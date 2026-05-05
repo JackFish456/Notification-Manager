@@ -54,6 +54,7 @@ Logs: `%LOCALAPPDATA%\GraphTeamsNotifyBridge\bridge.log`
 
 Tray menu:
 
+- **Mini CLI…** — small command window (`help`, `status`, `poll`, `auth`, `log`, `config`, `data`, `clear`, `exit`)  
 - **Open data folder** — token cache, state, logs  
 - **Edit config.json**  
 - **Sign out** — removes token cache and chat state  
