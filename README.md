@@ -33,7 +33,8 @@ Copy the **Application (client) ID** into `config.json`.
    - **`toast_app_id`**: Label shown for toasts (default `NotificationManager`); keep it stable so Windows groups them consistently.
    - **`use_top_overlay`**: `true` = draw our own **top-centered** notification (~toast-sized) with **slide-down enter** and **slide-up exit**; `false` = use **Windows-Toasts** (shell toasts).
    - **`overlay_width`**, **`overlay_height`**, **`overlay_top_margin`**: layout for the overlay card (pixels).
-   - **`overlay_dwell_seconds`**: how long the card stays before sliding away.
+   - **`overlay_dwell_seconds`**: how long the card stays before sliding away (1.5–120 s; also adjustable in **Customize**).
+   - **`overlay_opacity`**: window alpha for the custom banner (0.35–1.0; **Customize** uses percent).
    - **`overlay_enter_ms`**, **`overlay_exit_ms`**: animation duration for enter/exit.
 
 Overlay mode uses **Tkinter** on the **main UI thread** (required on Windows) while the tray icon runs on a background thread. Cards are centered on the **primary** monitor’s width.
@@ -52,7 +53,12 @@ On first launch a **browser window** opens for Microsoft sign-in. Tokens are cac
 
 Logs: `%LOCALAPPDATA%\GraphTeamsNotifyBridge\bridge.log`
 
-Tray menu:
+Tray:
+
+- **Left-click** the icon — **Customize** (opacity + how long banners stay); settings are saved to `config.json`  
+- **Right-click** — full menu  
+
+Menu items:
 
 - **Mini CLI…** — small command window (`help`, `status`, `poll`, `auth`, `log`, `config`, `data`, `clear`, `exit`)  
 - **Open data folder** — token cache, state, logs  

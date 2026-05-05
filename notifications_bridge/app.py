@@ -17,6 +17,7 @@ from notifications_bridge.config_loader import ensure_config_exists, load_config
 from notifications_bridge.graph_auth import acquire_token, build_msal_app, sign_out
 from notifications_bridge.graph_poll import format_toast, latest_message, list_chats
 from notifications_bridge.mini_cli import MiniCliWindow
+from notifications_bridge.settings_window import SettingsWindow
 from notifications_bridge.paths import (
     app_data_dir,
     config_path,
@@ -270,7 +271,11 @@ def run_tray(rt: AppRuntime) -> None:
     def on_cli(_icon, _item) -> None:
         MiniCliWindow.open_or_focus(rt)
 
+    def on_customize(_icon, _item) -> None:
+        SettingsWindow.open_or_focus(rt)
+
     menu = pystray.Menu(
+        pystray.MenuItem("Customize notifications", on_customize, default=True),
         pystray.MenuItem("Mini CLI…", on_cli),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Open data folder", on_open_data),
@@ -298,7 +303,10 @@ def run_tray(rt: AppRuntime) -> None:
             graph_polling_enabled=rt.graph_polling_enabled,
         )
         icon.visible = True
-        logger.info("Tray icon is running (check hidden icons ^ if you do not see it).")
+        logger.info(
+            "Tray icon is running (left-click opens Customize; right-click for menu; "
+            "check hidden icons ^ if you do not see it)."
+        )
 
     icon.run(setup=setup)
 
@@ -346,6 +354,7 @@ def main() -> None:
             height=cfg["overlay_height"],
             top_margin=cfg["overlay_top_margin"],
             dwell_ms=cfg["overlay_dwell_ms"],
+            alpha=cfg["overlay_opacity"],
             enter_ms=cfg["overlay_enter_ms"],
             exit_ms=cfg["overlay_exit_ms"],
         )

@@ -21,6 +21,7 @@ class TopOverlayManager:
         height: int = 92,
         top_margin: int = 10,
         dwell_ms: int = 5500,
+        alpha: float = 0.96,
         enter_ms: int = 220,
         exit_ms: int = 260,
     ) -> None:
@@ -28,11 +29,23 @@ class TopOverlayManager:
         self._width = max(280, min(width, 520))
         self._height = max(64, min(height, 200))
         self._top_margin = max(0, top_margin)
-        self._dwell_ms = max(1500, dwell_ms)
+        self._dwell_ms = max(1500, min(int(dwell_ms), 120_000))
+        self._alpha = max(0.35, min(1.0, float(alpha)))
         self._enter_ms = max(80, enter_ms)
         self._exit_ms = max(80, exit_ms)
         self._queue: deque[tuple[str, str]] = deque()
         self._busy = False
+
+    def apply_overlay_settings(
+        self,
+        *,
+        alpha: float | None = None,
+        dwell_ms: int | None = None,
+    ) -> None:
+        if alpha is not None:
+            self._alpha = max(0.35, min(1.0, float(alpha)))
+        if dwell_ms is not None:
+            self._dwell_ms = max(1500, min(int(dwell_ms), 120_000))
 
     def show(self, title: str, body: str) -> None:
         def _enqueue() -> None:
@@ -76,7 +89,7 @@ class TopOverlayManager:
         except tk.TclError:
             pass
         try:
-            win.attributes("-alpha", 0.96)
+            win.attributes("-alpha", self._alpha)
         except tk.TclError:
             pass
 

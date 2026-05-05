@@ -4,6 +4,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
+from typing import Any
 
 from notifications_bridge.paths import config_path, project_root
 
@@ -21,6 +22,23 @@ def ensure_config_exists() -> Path:
         raise FileNotFoundError(f"Missing {example} and {dst}")
     shutil.copy(example, dst)
     return dst
+
+
+def merge_and_save_config(updates: dict[str, Any]) -> None:
+    """Merge keys into config.json and write atomically (best-effort)."""
+    path = config_path()
+    if not path.exists():
+        ensure_config_exists()
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("config.json root must be an object")
+    data.update(updates)
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    tmp.replace(path)
 
 
 def load_config() -> dict:
@@ -55,7 +73,12 @@ def load_config() -> dict:
     overlay_height = max(64, min(overlay_height, 200))
     overlay_top_margin = int(data.get("overlay_top_margin") or 10)
     overlay_dwell_ms = int(float(data.get("overlay_dwell_seconds") or 5.5) * 1000)
-    overlay_dwell_ms = max(1500, min(overlay_dwell_ms, 60_000))
+    overlay_dwell_ms = max(1500, min(overlay_dwell_ms, 120_000))
+    try:
+        overlay_opacity = float(data.get("overlay_opacity", 0.96))
+    except (TypeError, ValueError):
+        overlay_opacity = 0.96
+    overlay_opacity = max(0.35, min(1.0, overlay_opacity))
     overlay_enter_ms = int(data.get("overlay_enter_ms") or 220)
     overlay_exit_ms = int(data.get("overlay_exit_ms") or 260)
     return {
@@ -68,6 +91,7 @@ def load_config() -> dict:
         "overlay_height": overlay_height,
         "overlay_top_margin": overlay_top_margin,
         "overlay_dwell_ms": overlay_dwell_ms,
+        "overlay_opacity": overlay_opacity,
         "overlay_enter_ms": overlay_enter_ms,
         "overlay_exit_ms": overlay_exit_ms,
     }

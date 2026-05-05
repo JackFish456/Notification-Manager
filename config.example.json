@@ -8,6 +8,7 @@
   "overlay_height": 92,
   "overlay_top_margin": 10,
   "overlay_dwell_seconds": 5.5,
+  "overlay_opacity": 0.96,
   "overlay_enter_ms": 220,
   "overlay_exit_ms": 260
 }
