@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -15,3 +16,4 @@ class AppRuntime:
     msal_app: Any
     cache_path: Path
     graph_polling_enabled: bool = True
+    on_quit_application: Callable[[], None] | None = field(default=None)

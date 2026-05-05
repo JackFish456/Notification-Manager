@@ -10,7 +10,13 @@ from notifications_bridge.top_overlay import TopOverlayManager
 
 logger = logging.getLogger(__name__)
 
-# Preset dwell durations (seconds), aligned with config limits 1.5–120 s
+# Pale lavender panel (reference display app)
+_WIN_BG = "#EFE8F5"
+_BTN_BG = "#D8C8E8"
+_BTN_BG_ACTIVE = "#C9B8DC"
+_BTN_BORDER = "#1a1a1a"
+_TEXT = "#000000"
+
 _DWELL_SEC_VALUES: tuple[float, ...] = (
     1.5,
     2.0,
@@ -51,38 +57,43 @@ def _nearest_dwell_index(sec: float) -> int:
     return best_i
 
 
-def _apply_dark_style(root: tk.Tk | tk.Toplevel) -> ttk.Style:
-    """Match top-overlay palette: dark panel, light text (internal display style)."""
-    bg = "#2d2d2d"
-    fg = "#f3f3f3"
-    sub = "#a8a8a8"
-    field = "#3d3d3d"
-    root.configure(bg=bg)
-
-    style = ttk.Style(root)
+def _try_win11_rounded_corners(w: tk.Misc) -> None:
     try:
-        style.theme_use("clam")
-    except tk.TclError:
+        import ctypes
+        from ctypes import wintypes
+
+        hwnd = w.winfo_id()
+        DWMWA_WINDOW_CORNER_PREFERENCE = 33
+        DWMWCP_ROUND = 2
+        pref = ctypes.c_uint(DWMWCP_ROUND)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            wintypes.HWND(hwnd),
+            ctypes.c_uint(DWMWA_WINDOW_CORNER_PREFERENCE),
+            ctypes.byref(pref),
+            ctypes.sizeof(pref),
+        )
+    except Exception:
         pass
 
-    style.configure("Display.TFrame", background=bg)
-    style.configure("Display.TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
-    style.configure("Display.TButton", background=field, foreground=fg, font=("Segoe UI", 10))
-    style.map(
-        "Display.TButton",
-        background=[("active", "#4a4a4a"), ("pressed", "#555555")],
-        foreground=[("disabled", sub)],
-    )
-    style.configure(
-        "Display.TCombobox",
-        fieldbackground=field,
-        background=field,
-        foreground=fg,
-        arrowcolor=fg,
+
+def _lavender_button(parent: tk.Misc, text: str, command) -> tk.Button:
+    return tk.Button(
+        parent,
+        text=text,
+        command=command,
         font=("Segoe UI", 10),
+        bg=_BTN_BG,
+        fg=_TEXT,
+        activebackground=_BTN_BG_ACTIVE,
+        activeforeground=_TEXT,
+        relief=tk.FLAT,
+        bd=0,
+        highlightthickness=1,
+        highlightbackground=_BTN_BORDER,
+        highlightcolor=_BTN_BORDER,
+        padx=14,
+        pady=8,
     )
-    style.map("Display.TCombobox", fieldbackground=[("readonly", field)])
-    return style
 
 
 class SettingsWindow:
@@ -93,7 +104,9 @@ class SettingsWindow:
         self._win: tk.Toplevel | None = None
         self._opacity_scale: tk.Scale | None = None
         self._dwell_combo: ttk.Combobox | None = None
-        self._opacity_label: ttk.Label | None = None
+        self._opacity_pct_label: tk.Label | None = None
+        self._icon_photo: object | None = None
+        self._rounded_applied = False
         self._build()
 
     @classmethod
@@ -120,13 +133,18 @@ class SettingsWindow:
         if self._opacity_scale is not None:
             self._opacity_scale.set(op)
         if self._dwell_combo is not None:
-            idx = _nearest_dwell_index(dwell)
-            self._dwell_combo.current(idx)
+            self._dwell_combo.current(_nearest_dwell_index(dwell))
         self._refresh_opacity_label()
 
     def _refresh_opacity_label(self) -> None:
-        if self._opacity_label and self._opacity_scale:
-            self._opacity_label.configure(text=f"{int(self._opacity_scale.get())}%")
+        if self._opacity_pct_label and self._opacity_scale:
+            self._opacity_pct_label.configure(text=f"{int(self._opacity_scale.get())}%")
+
+    def _on_map(self, _event=None) -> None:
+        if self._rounded_applied or self._win is None:
+            return
+        self._rounded_applied = True
+        _try_win11_rounded_corners(self._win)
 
     def _build(self) -> None:
         rt = self._rt
@@ -134,71 +152,101 @@ class SettingsWindow:
 
         self._win = tk.Toplevel(rt.root)
         self._win.title("Customize")
-        self._win.geometry("360x200")
-        self._win.minsize(320, 180)
+        self._win.geometry("320x280")
+        self._win.minsize(300, 260)
+        self._win.configure(bg=_WIN_BG)
+        self._win.bind("<Map>", self._on_map)
+
         try:
-            self._win.attributes("-topmost", True)
+            from PIL import ImageTk
+
+            from notifications_bridge import app as appmod
+
+            self._icon_photo = ImageTk.PhotoImage(appmod._tray_image())
+            self._win.iconphoto(True, self._icon_photo)
+        except Exception:
+            logger.debug("Could not set window icon", exc_info=True)
+
+        outer = tk.Frame(self._win, bg=_WIN_BG)
+        outer.pack(fill=tk.BOTH, expand=True, padx=16, pady=14)
+        outer.grid_columnconfigure(0, weight=1)
+        outer.grid_columnconfigure(1, weight=1)
+
+        style = ttk.Style(self._win)
+        try:
+            style.theme_use("clam")
         except tk.TclError:
             pass
-
-        _apply_dark_style(self._win)
-
-        outer = ttk.Frame(self._win, padding=16, style="Display.TFrame")
-        outer.pack(fill=tk.BOTH, expand=True)
+        style.configure(
+            "Lav.TCombobox",
+            fieldbackground=_BTN_BG,
+            background=_BTN_BG,
+            foreground=_TEXT,
+            arrowcolor=_TEXT,
+            bordercolor=_BTN_BORDER,
+            lightcolor=_BTN_BG,
+            darkcolor=_BTN_BG,
+            font=("Segoe UI", 10),
+        )
+        style.map("Lav.TCombobox", fieldbackground=[("readonly", _BTN_BG)])
 
         op0 = int(round(float(cfg.get("overlay_opacity", 0.96)) * 100))
         dwell0 = float(cfg.get("overlay_dwell_ms", 5500)) / 1000.0
 
-        f1 = ttk.Frame(outer, style="Display.TFrame")
-        f1.pack(fill=tk.X, pady=(0, 10))
-        row1 = ttk.Frame(f1, style="Display.TFrame")
-        row1.pack(fill=tk.X)
-        ttk.Label(row1, text="Opacity", style="Display.TLabel").pack(side=tk.LEFT)
-        self._opacity_label = ttk.Label(row1, text="", style="Display.TLabel")
-        self._opacity_label.pack(side=tk.RIGHT)
+        r = 0
+        tk.Label(outer, text="Opacity", bg=_WIN_BG, fg=_TEXT, font=("Segoe UI", 10)).grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(0, 2)
+        )
+        r += 1
+        head = tk.Frame(outer, bg=_WIN_BG)
+        head.grid(row=r, column=0, columnspan=2, sticky="ew", pady=(0, 4))
         self._opacity_scale = tk.Scale(
-            f1,
+            head,
             from_=35,
             to=100,
             orient=tk.HORIZONTAL,
             showvalue=0,
-            length=300,
-            bg="#2d2d2d",
-            fg="#f3f3f3",
-            troughcolor="#404040",
+            length=260,
+            bg=_WIN_BG,
+            fg=_TEXT,
+            troughcolor=_BTN_BG,
             highlightthickness=0,
             bd=0,
-            activebackground="#555555",
+            activebackground=_BTN_BG_ACTIVE,
             command=lambda _v: self._refresh_opacity_label(),
         )
         self._opacity_scale.set(op0)
-        self._opacity_scale.pack(fill=tk.X, pady=(6, 0))
+        self._opacity_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._opacity_pct_label = tk.Label(
+            head, text="", bg=_WIN_BG, fg=_TEXT, font=("Segoe UI", 10), width=5
+        )
+        self._opacity_pct_label.pack(side=tk.RIGHT, padx=(8, 0))
+        r += 1
 
-        f2 = ttk.Frame(outer, style="Display.TFrame")
-        f2.pack(fill=tk.X, pady=(8, 0))
-        row2 = ttk.Frame(f2, style="Display.TFrame")
-        row2.pack(fill=tk.X)
-        ttk.Label(row2, text="Time on screen", style="Display.TLabel").pack(side=tk.LEFT)
+        tk.Label(outer, text="Time on screen", bg=_WIN_BG, fg=_TEXT, font=("Segoe UI", 10)).grid(
+            row=r, column=0, sticky="w", pady=(14, 4)
+        )
         self._dwell_combo = ttk.Combobox(
-            row2,
+            outer,
             values=_DWELL_OPTIONS,
             state="readonly",
-            width=12,
-            style="Display.TCombobox",
+            width=11,
+            style="Lav.TCombobox",
         )
-        self._dwell_combo.pack(side=tk.RIGHT)
+        self._dwell_combo.grid(row=r, column=1, sticky="e", pady=(14, 4))
         self._dwell_combo.current(_nearest_dwell_index(dwell0))
+        r += 1
 
         self._refresh_opacity_label()
 
-        btn_row = ttk.Frame(outer, style="Display.TFrame")
-        btn_row.pack(fill=tk.X, pady=(20, 0))
-        ttk.Button(btn_row, text="Apply", command=self._apply, style="Display.TButton").pack(
-            side=tk.RIGHT, padx=(8, 0)
-        )
-        ttk.Button(btn_row, text="Close", command=self._on_close, style="Display.TButton").pack(
-            side=tk.RIGHT
-        )
+        btn_apply = _lavender_button(outer, "Apply", self._apply)
+        btn_close = _lavender_button(outer, "Close", self._on_close)
+        btn_apply.grid(row=r, column=0, sticky="ew", padx=(0, 6), pady=(18, 6))
+        btn_close.grid(row=r, column=1, sticky="ew", padx=(6, 0), pady=(18, 6))
+        r += 1
+
+        btn_quit = _lavender_button(outer, "Quit", self._quit_app)
+        btn_quit.grid(row=r, column=0, columnspan=2, sticky="ew", pady=(6, 0))
 
         self._win.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -233,6 +281,13 @@ class SettingsWindow:
         self._rt.cfg["overlay_dwell_ms"] = dwell_ms
         if isinstance(self._rt.notifier, TopOverlayManager):
             self._rt.notifier.apply_overlay_settings(alpha=alpha, dwell_ms=dwell_ms)
+
+    def _quit_app(self) -> None:
+        fn = self._rt.on_quit_application
+        if fn is not None:
+            fn()
+        else:
+            self._on_close()
 
     def _on_close(self) -> None:
         try:

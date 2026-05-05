@@ -295,6 +295,19 @@ def run_tray(rt: AppRuntime) -> None:
 
     def setup(icon) -> None:
         _stop.clear()
+
+        def quit_entire_app() -> None:
+            _stop.set()
+            try:
+                icon.stop()
+            except Exception:
+                logger.exception("Failed to stop tray icon")
+            try:
+                tk_root.after(0, tk_root.quit)
+            except Exception:
+                logger.exception("Failed to stop Tk root")
+
+        rt.on_quit_application = quit_entire_app
         _start_background_poll(
             msal_app,
             cache_path,
