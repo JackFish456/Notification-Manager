@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from pathlib import Path
 
 from notifications_bridge.paths import config_path, project_root
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_config_exists() -> Path:
@@ -32,9 +35,14 @@ def load_config() -> dict:
     if not isinstance(data, dict):
         raise ValueError("config.json must contain a JSON object at the root.")
     client_id = data.get("client_id", "").strip()
-    if not client_id or client_id == "00000000-0000-0000-0000-000000000000":
+    if not client_id:
         raise ValueError(
             "Set client_id in config.json (Azure AD application / public client ID)."
+        )
+    if client_id == "00000000-0000-0000-0000-000000000000":
+        logger.warning(
+            "client_id is still the placeholder; Graph sign-in will fail until you set a real "
+            "Azure AD public client ID in config.json (tray will still run)."
         )
     tenant_id = (data.get("tenant_id") or "organizations").strip()
     poll = int(data.get("poll_interval_seconds") or 60)

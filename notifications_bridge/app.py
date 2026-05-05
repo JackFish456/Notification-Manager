@@ -245,6 +245,7 @@ def run_tray(rt: AppRuntime) -> None:
             cfg["poll_interval_seconds"],
         )
         icon.visible = True
+        logger.info("Tray icon is running (check hidden icons ^ if you do not see it).")
 
     icon.run(setup=setup)
 
