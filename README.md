@@ -13,7 +13,7 @@ This is **not** an official Kiewit or Microsoft product. Use only if your **IT a
 ## One-time: Azure AD app registration
 
 1. In [Azure Portal](https://portal.azure.com/) go **Microsoft Entra ID** → **App registrations** → **New registration**.
-2. Name it (for example) `GraphTeamsNotifyBridge`, account type **Single tenant** (or multitenant if you know you need it).
+2. Name it (for example) `Notification Manager`, account type **Single tenant** (or multitenant if you know you need it).
 3. Under **Authentication** → **Platform configurations** → **Add a platform** → **Mobile and desktop applications**:
    - Enable the MSAL redirect URI **`https://login.microsoftonline.com/common/oauth2/nativeclient`** (and/or **`http://localhost`** as used by MSAL’s loopback listener—your tenant may require both to be checked).
 4. Under **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated**:
@@ -30,7 +30,7 @@ Copy the **Application (client) ID** into `config.json`.
    - **`client_id`**: Application (client) ID from Azure.
    - **`tenant_id`**: Your directory tenant ID, or use **`organizations`** for any work/school account in the commercial cloud (adjust if you use GCC/GCCH).
    - **`poll_interval_seconds`**: How often to poll Graph (minimum 15; default 60).
-   - **`toast_app_id`**: Label shown for toasts; keep it stable so Windows groups them consistently.
+   - **`toast_app_id`**: Label shown for toasts (default `NotificationManager`); keep it stable so Windows groups them consistently.
    - **`use_top_overlay`**: `true` = draw our own **top-centered** notification (~toast-sized) with **slide-down enter** and **slide-up exit**; `false` = use **Windows-Toasts** (shell toasts).
    - **`overlay_width`**, **`overlay_height`**, **`overlay_top_margin`**: layout for the overlay card (pixels).
    - **`overlay_dwell_seconds`**: how long the card stays before sliding away.
