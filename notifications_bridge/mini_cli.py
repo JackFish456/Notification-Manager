@@ -168,6 +168,7 @@ class MiniCliWindow:
         self._print(
             f"Signed-in accounts: {names}\n"
             f"use_top_overlay: {overlay}\n"
+            f"graph_polling_enabled: {rt.graph_polling_enabled}\n"
             f"poll_interval_seconds: {rt.cfg.get('poll_interval_seconds')}\n"
             f"config: {config_path()}\n"
             f"log: {log_path()}\n"
