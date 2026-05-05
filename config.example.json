@@ -1,0 +1,6 @@
+{
+  "client_id": "00000000-0000-0000-0000-000000000000",
+  "tenant_id": "organizations",
+  "poll_interval_seconds": 60,
+  "toast_app_id": "KiewitTeamsNotifyBridge"
+}

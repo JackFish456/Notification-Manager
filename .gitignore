@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.log
+config.json
+msal_token.bin
+*.egg-info/
+dist/
+build/
