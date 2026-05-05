@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from notifications_bridge.config_loader import merge_and_save_config
 from notifications_bridge.runtime import AppRuntime
@@ -107,6 +107,8 @@ class SettingsWindow:
         self._opacity_pct_label: tk.Label | None = None
         self._icon_photo: object | None = None
         self._rounded_applied = False
+        self._status_var = tk.StringVar(value="")
+        self._status_after_id: str | None = None
         self._build()
 
     @classmethod
@@ -139,6 +141,23 @@ class SettingsWindow:
     def _refresh_opacity_label(self) -> None:
         if self._opacity_pct_label and self._opacity_scale:
             self._opacity_pct_label.configure(text=f"{int(self._opacity_scale.get())}%")
+
+    def _flash_status(self, message: str) -> None:
+        w = self._win
+        if w is None:
+            return
+        if self._status_after_id is not None:
+            try:
+                w.after_cancel(self._status_after_id)
+            except Exception:
+                pass
+            self._status_after_id = None
+        self._status_var.set(message)
+        self._status_after_id = w.after(6000, self._clear_status)
+
+    def _clear_status(self) -> None:
+        self._status_var.set("")
+        self._status_after_id = None
 
     def _on_map(self, _event=None) -> None:
         if self._rounded_applied or self._win is None:
@@ -245,6 +264,17 @@ class SettingsWindow:
         btn_close.grid(row=r, column=1, sticky="ew", padx=(6, 0), pady=(18, 6))
         r += 1
 
+        tk.Label(
+            outer,
+            textvariable=self._status_var,
+            bg=_WIN_BG,
+            fg="#2a2a2a",
+            font=("Segoe UI", 9),
+            wraplength=280,
+            justify="center",
+        ).grid(row=r, column=0, columnspan=2, sticky="ew", pady=(2, 4))
+        r += 1
+
         btn_quit = _lavender_button(outer, "Quit", self._quit_app)
         btn_quit.grid(row=r, column=0, columnspan=2, sticky="ew", pady=(6, 0))
 
@@ -273,14 +303,25 @@ class SettingsWindow:
                     "overlay_dwell_seconds": round(dwell_sec, 2),
                 }
             )
-        except Exception:
+        except Exception as e:
             logger.exception("Failed to write config.json")
+            messagebox.showerror(
+                "Customize",
+                f"Could not save config.json:\n{e}",
+                parent=self._win,
+            )
             return
 
         self._rt.cfg["overlay_opacity"] = alpha
         self._rt.cfg["overlay_dwell_ms"] = dwell_ms
         if isinstance(self._rt.notifier, TopOverlayManager):
             self._rt.notifier.apply_overlay_settings(alpha=alpha, dwell_ms=dwell_ms)
+            self._flash_status("Saved. The next top banner will use this opacity and time.")
+        else:
+            self._flash_status(
+                "Saved. Top overlay is off, so opacity and dwell apply only after you set "
+                "use_top_overlay to true (and restart)."
+            )
 
     def _quit_app(self) -> None:
         fn = self._rt.on_quit_application
