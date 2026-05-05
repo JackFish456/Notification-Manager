@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 _stop = threading.Event()
 _poll_thread: threading.Thread | None = None
 _last_poll_ok_at: float | None = None
+_placeholder_poll_notice_logged = False
 
 
 def _setup_logging() -> None:
@@ -147,9 +148,28 @@ def _poll_cycle(app, cache_path, notifier: Any, state_file: Path) -> None:
     state.save(state_file)
 
 
-def _poll_loop(app, cache_path, notifier: Any, interval: int) -> None:
-    global _last_poll_ok_at
+def _poll_loop(
+    app,
+    cache_path,
+    notifier: Any,
+    interval: int,
+    *,
+    graph_polling_enabled: bool,
+) -> None:
+    global _last_poll_ok_at, _placeholder_poll_notice_logged
     while not _stop.is_set():
+        if not graph_polling_enabled:
+            if not _placeholder_poll_notice_logged:
+                logger.warning(
+                    "Graph polling is paused: set a real Azure client_id in config.json and restart "
+                    "(tray and Mini CLI stay available)."
+                )
+                _placeholder_poll_notice_logged = True
+            for _ in range(interval):
+                if _stop.is_set():
+                    break
+                time.sleep(1)
+            continue
         try:
             _poll_cycle(app, cache_path, notifier, state_file_path())
             _last_poll_ok_at = time.time()
@@ -167,13 +187,26 @@ def _poll_loop(app, cache_path, notifier: Any, interval: int) -> None:
             time.sleep(1)
 
 
-def _start_background_poll(app, cache_path, notifier: Any, interval: int) -> None:
+def _start_background_poll(
+    app,
+    cache_path,
+    notifier: Any,
+    interval: int,
+    *,
+    graph_polling_enabled: bool,
+) -> None:
     global _poll_thread
     if _poll_thread and _poll_thread.is_alive():
         return
 
     def run() -> None:
-        _poll_loop(app, cache_path, notifier, interval)
+        _poll_loop(
+            app,
+            cache_path,
+            notifier,
+            interval,
+            graph_polling_enabled=graph_polling_enabled,
+        )
 
     _poll_thread = threading.Thread(target=run, name="graph-poll", daemon=True)
     _poll_thread.start()
@@ -243,6 +276,7 @@ def run_tray(rt: AppRuntime) -> None:
             cache_path,
             notifier,
             cfg["poll_interval_seconds"],
+            graph_polling_enabled=rt.graph_polling_enabled,
         )
         icon.visible = True
         logger.info("Tray icon is running (check hidden icons ^ if you do not see it).")
@@ -299,6 +333,14 @@ def main() -> None:
     else:
         notifier = ToastService(cfg["toast_app_id"])
 
-    rt = AppRuntime(cfg=cfg, notifier=notifier, root=root, msal_app=msal_app, cache_path=cache_path)
+    placeholder = cfg["client_id"].strip() == "00000000-0000-0000-0000-000000000000"
+    rt = AppRuntime(
+        cfg=cfg,
+        notifier=notifier,
+        root=root,
+        msal_app=msal_app,
+        cache_path=cache_path,
+        graph_polling_enabled=not placeholder,
+    )
     threading.Thread(target=lambda: run_tray(rt), daemon=True, name="tray").start()
     root.mainloop()

@@ -14,3 +14,4 @@ class AppRuntime:
     root: Any
     msal_app: Any
     cache_path: Path
+    graph_polling_enabled: bool = True

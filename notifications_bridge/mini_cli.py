@@ -12,6 +12,13 @@ from notifications_bridge.runtime import AppRuntime
 
 logger = logging.getLogger(__name__)
 
+_PLACEHOLDER_CLIENT = "00000000-0000-0000-0000-000000000000"
+
+
+def _client_ready(cfg: dict) -> bool:
+    cid = (cfg.get("client_id") or "").strip()
+    return bool(cid) and cid != _PLACEHOLDER_CLIENT
+
 
 class MiniCliWindow:
     """Small command palette (Tk) opened from the tray."""
@@ -176,6 +183,9 @@ class MiniCliWindow:
             self._print("last successful poll: (not yet)\n")
 
     def _cmd_poll(self) -> None:
+        if not _client_ready(self._rt.cfg):
+            self._print("poll: set a real Azure client_id in config.json first.\n")
+            return
         self._print("poll: starting…\n")
 
         def work() -> None:
@@ -207,6 +217,9 @@ class MiniCliWindow:
         threading.Thread(target=work, daemon=True).start()
 
     def _cmd_auth(self) -> None:
+        if not _client_ready(self._rt.cfg):
+            self._print("auth: set a real Azure client_id in config.json first.\n")
+            return
         self._print("auth: opening browser if needed…\n")
 
         def work() -> None:
