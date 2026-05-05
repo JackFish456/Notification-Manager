@@ -52,7 +52,23 @@ def _setup_logging() -> None:
 
 
 def _tray_image() -> Image.Image:
-    """Chunky pixel letter J in pink on a dark background (nearest-neighbor upscaled)."""
+    """Square tray icon: pink outer border, dark purple interior, white block letter J."""
+    size = 64
+    border_w = 5
+    pink = (236, 72, 153)
+    purple = (52, 28, 78)
+    white = (255, 255, 255)
+
+    img = Image.new("RGB", (size, size), pink)
+    px = img.load()
+    inner_left = border_w
+    inner_top = border_w
+    inner_right = size - border_w
+    inner_bottom = size - border_w
+    for y in range(inner_top, inner_bottom):
+        for x in range(inner_left, inner_right):
+            px[x, y] = purple
+
     rows = (
         "..####..",
         "....##..",
@@ -65,24 +81,20 @@ def _tray_image() -> Image.Image:
         "##..##..",
         ".####...",
     )
-    rh = len(rows)
-    rw = len(rows[0])
-    scale = 6
-    bg = (18, 18, 24)
-    pink = (236, 72, 153)
-    pink_hi = (255, 140, 200)
-    img = Image.new("RGB", (64, 64), bg)
-    px = img.load()
-    offx = (64 - rw * scale) // 2
-    offy = (64 - rh * scale) // 2
-    for y, row in enumerate(rows):
-        for x, ch in enumerate(row):
+    rw, rh = len(rows[0]), len(rows)
+    inner_w = inner_right - inner_left
+    inner_h = inner_bottom - inner_top
+    scale = max(3, min(inner_w // rw, inner_h // rh))
+    j_w, j_h = rw * scale, rh * scale
+    offx = inner_left + (inner_w - j_w) // 2
+    offy = inner_top + (inner_h - j_h) // 2
+    for jy, row in enumerate(rows):
+        for jx, ch in enumerate(row):
             if ch != "#":
                 continue
-            shade = pink_hi if (x + y) % 3 == 0 else pink
             for dy in range(scale):
                 for dx in range(scale):
-                    px[offx + x * scale + dx, offy + y * scale + dy] = shade
+                    px[offx + jx * scale + dx, offy + jy * scale + dy] = white
     return img
 
 
