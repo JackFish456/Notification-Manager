@@ -11,7 +11,7 @@ from typing import Any
 
 import pystray
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from notifications_bridge.config_loader import ensure_config_exists, load_config
 from notifications_bridge.graph_auth import acquire_token, build_msal_app, sign_out
@@ -51,18 +51,37 @@ def _setup_logging() -> None:
 
 
 def _tray_image() -> Image.Image:
-    """Monitor-style tray icon: screen + accent dot (pink, not yellow)."""
-    img = Image.new("RGB", (64, 64), (28, 28, 30))
-    d = ImageDraw.Draw(img)
-    # stand
-    d.rectangle((26, 54, 37, 58), fill=(72, 72, 76))
-    # bezel
-    d.rounded_rectangle((6, 8, 57, 48), radius=5, fill=(52, 52, 56))
-    # screen (cool neutral; was easy to tint yellow on some themes)
-    d.rounded_rectangle((11, 13, 52, 43), radius=3, fill=(225, 232, 242))
-    # notification badge — pink instead of classic yellow dot
+    """Chunky pixel letter J in pink on a dark background (nearest-neighbor upscaled)."""
+    rows = (
+        "..####..",
+        "....##..",
+        "....##..",
+        "....##..",
+        "....##..",
+        "....##..",
+        "....##..",
+        "....##..",
+        "##..##..",
+        ".####...",
+    )
+    rh = len(rows)
+    rw = len(rows[0])
+    scale = 6
+    bg = (18, 18, 24)
     pink = (236, 72, 153)
-    d.ellipse((40, 30, 52, 42), fill=pink, outline=(255, 182, 218), width=1)
+    pink_hi = (255, 140, 200)
+    img = Image.new("RGB", (64, 64), bg)
+    px = img.load()
+    offx = (64 - rw * scale) // 2
+    offy = (64 - rh * scale) // 2
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch != "#":
+                continue
+            shade = pink_hi if (x + y) % 3 == 0 else pink
+            for dy in range(scale):
+                for dx in range(scale):
+                    px[offx + x * scale + dx, offy + y * scale + dy] = shade
     return img
 
 
@@ -263,9 +282,9 @@ def run_tray(rt: AppRuntime) -> None:
     )
 
     icon = pystray.Icon(
-        "graph_teams_notify",
+        "notification_manager",
         _tray_image(),
-        "Graph Teams notify bridge",
+        "Notification Manager",
         menu,
     )
 

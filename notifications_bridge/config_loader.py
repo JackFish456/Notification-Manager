@@ -47,7 +47,7 @@ def load_config() -> dict:
     tenant_id = (data.get("tenant_id") or "organizations").strip()
     poll = int(data.get("poll_interval_seconds") or 60)
     poll = max(15, min(poll, 600))
-    toast_app_id = (data.get("toast_app_id") or "GraphTeamsNotifyBridge").strip()
+    toast_app_id = (data.get("toast_app_id") or "NotificationManager").strip()
     use_top_overlay = bool(data.get("use_top_overlay", False))
     overlay_width = int(data.get("overlay_width") or 360)
     overlay_width = max(280, min(overlay_width, 520))

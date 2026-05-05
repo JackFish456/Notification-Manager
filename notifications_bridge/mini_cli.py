@@ -46,7 +46,7 @@ class MiniCliWindow:
                     cls._instance = None
             cls._instance = MiniCliWindow(rt)
             cls._instance._print(
-                "Graph Teams notify — mini CLI. Type `help` and press Enter.\n"
+                "Notification Manager — mini CLI. Type `help` and press Enter.\n"
             )
 
         rt.root.after(0, go)
@@ -56,7 +56,7 @@ class MiniCliWindow:
 
         rt = self._rt
         self._win = tk.Toplevel(rt.root)
-        self._win.title("Notify bridge — CLI")
+        self._win.title("Notification Manager — CLI")
         self._win.geometry("520x360")
         self._win.minsize(420, 260)
         try:
