@@ -1,10 +1,44 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections import deque
 from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+
+def _primary_work_area_top_center(width: int, top_margin: int) -> tuple[int, int] | None:
+    """Top-center (x, end_y) on the primary monitor work area (taskbar excluded).
+
+    Tk's ``winfo_screenwidth`` / ``geometry(+0+…)`` do not reliably match the primary
+    monitor when multiple displays are arranged with a non-zero virtual origin, which
+    can pin banners to the top-left of the virtual desktop.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import byref
+        from ctypes import wintypes
+
+        SPI_GETWORKAREA = 48
+        rect = wintypes.RECT()
+        if not ctypes.windll.user32.SystemParametersInfoW(
+            SPI_GETWORKAREA,
+            0,
+            byref(rect),
+            0,
+        ):
+            return None
+        wl, wt, wr = int(rect.left), int(rect.top), int(rect.right)
+        work_w = max(0, wr - wl)
+        x = wl + max(0, (work_w - width) // 2)
+        end_y = wt + max(0, top_margin)
+        return x, end_y
+    except Exception:
+        logger.debug("Primary work area lookup failed; using Tk fallback", exc_info=True)
+        return None
 
 
 class TopOverlayManager:
@@ -77,9 +111,13 @@ class TopOverlayManager:
         import tkinter as tk
         from tkinter import font as tkfont
 
-        sw = int(self._root.winfo_screenwidth())
-        x = max(0, (sw - self._width) // 2)
-        end_y = self._top_margin
+        placed = _primary_work_area_top_center(self._width, self._top_margin)
+        if placed is not None:
+            x, end_y = placed
+        else:
+            sw = int(self._root.winfo_screenwidth())
+            x = max(0, (sw - self._width) // 2)
+            end_y = self._top_margin
         start_y = end_y - self._height - 24
 
         win = tk.Toplevel(self._root)
