@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -286,17 +287,62 @@ def run_tray(rt: AppRuntime) -> None:
     def on_customize(_icon, _item) -> None:
         SettingsWindow.open_or_focus(rt)
 
-    menu = pystray.Menu(
+    def on_mute_teams_windows_toasts(_icon, _item) -> None:
+        def work() -> None:
+            from tkinter import messagebox
+
+            from notifications_bridge.teams_windows_notifications import (
+                disable_teams_windows_notifications,
+            )
+
+            changed, errs = disable_teams_windows_notifications()
+            if changed:
+                msg = (
+                    "Windows will no longer show its own Teams toast banners for:\n\n"
+                    + "\n".join(changed[:12])
+                )
+                if len(changed) > 12:
+                    msg += f"\n… and {len(changed) - 12} more"
+                if errs:
+                    msg += "\n\nSome entries could not be updated (see log)."
+                messagebox.showinfo("Notification Manager", msg, parent=tk_root)
+            elif errs:
+                messagebox.showerror(
+                    "Notification Manager",
+                    "Could not update notification settings:\n" + "\n".join(errs[:5]),
+                    parent=tk_root,
+                )
+            else:
+                messagebox.showinfo(
+                    "Notification Manager",
+                    "No Teams-related entries were found in Windows notification settings.\n\n"
+                    "Open Windows Settings → System → Notifications, find Microsoft Teams, "
+                    "and turn off notifications or banners there.",
+                    parent=tk_root,
+                )
+
+        tk_root.after(0, work)
+
+    menu_items: list = [
         pystray.MenuItem("Customize notifications", on_customize, default=True),
-        pystray.MenuItem("Mini CLI…", on_cli),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Open data folder", on_open_data),
-        pystray.MenuItem("Edit config.json", on_open_config),
-        pystray.MenuItem("Sign out", on_sign_out),
-        pystray.MenuItem("MSAL help (browser)", on_help),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Quit", on_quit),
+    ]
+    if sys.platform == "win32":
+        menu_items.append(
+            pystray.MenuItem("Mute Teams' Windows toasts", on_mute_teams_windows_toasts)
+        )
+    menu_items.extend(
+        [
+            pystray.MenuItem("Mini CLI…", on_cli),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Open data folder", on_open_data),
+            pystray.MenuItem("Edit config.json", on_open_config),
+            pystray.MenuItem("Sign out", on_sign_out),
+            pystray.MenuItem("MSAL help (browser)", on_help),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quit", on_quit),
+        ]
     )
+    menu = pystray.Menu(*menu_items)
 
     icon = pystray.Icon(
         "notification_manager",
