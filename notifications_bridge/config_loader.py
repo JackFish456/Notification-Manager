@@ -24,8 +24,13 @@ def load_config() -> dict:
     path = config_path()
     if not path.exists():
         ensure_config_exists()
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"config.json is not valid JSON ({e}).") from e
+    if not isinstance(data, dict):
+        raise ValueError("config.json must contain a JSON object at the root.")
     client_id = data.get("client_id", "").strip()
     if not client_id or client_id == "00000000-0000-0000-0000-000000000000":
         raise ValueError(

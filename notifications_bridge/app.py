@@ -94,48 +94,52 @@ def _poll_cycle(app, cache_path, notifier: Any, state_file: Path) -> None:
         chat_id = chat.get("id")
         if not chat_id:
             continue
-        updated = chat.get("lastUpdatedDateTime")
-        prev = state.chats.get(chat_id)
+        try:
+            updated = chat.get("lastUpdatedDateTime")
+            prev = state.chats.get(chat_id)
 
-        if not state.initialized:
+            if not state.initialized:
+                msg = latest_message(token, chat_id)
+                mid = msg.get("id") if msg else None
+                state.chats[chat_id] = {
+                    "last_message_id": mid,
+                    "last_updated": updated,
+                }
+                continue
+
+            if prev is None:
+                msg = latest_message(token, chat_id)
+                mid = msg.get("id") if msg else None
+                state.chats[chat_id] = {
+                    "last_message_id": mid,
+                    "last_updated": updated,
+                }
+                continue
+
+            prev_updated = prev.get("last_updated")
+            prev_mid = prev.get("last_message_id")
+            if updated == prev_updated:
+                continue
+
             msg = latest_message(token, chat_id)
-            mid = msg.get("id") if msg else None
+            if not msg:
+                state.chats[chat_id] = {
+                    "last_message_id": prev_mid,
+                    "last_updated": updated,
+                }
+                continue
+            mid = msg.get("id")
+            if mid and mid != prev_mid and prev_mid is not None:
+                if msg.get("messageType") in (None, "message"):
+                    title, body = format_toast(chat, msg)
+                    notifier.show(title, body)
             state.chats[chat_id] = {
-                "last_message_id": mid,
+                "last_message_id": mid or prev_mid,
                 "last_updated": updated,
             }
+        except Exception:
+            logger.exception("Skipping chat %s due to error", chat_id)
             continue
-
-        if prev is None:
-            msg = latest_message(token, chat_id)
-            mid = msg.get("id") if msg else None
-            state.chats[chat_id] = {
-                "last_message_id": mid,
-                "last_updated": updated,
-            }
-            continue
-
-        prev_updated = prev.get("last_updated")
-        prev_mid = prev.get("last_message_id")
-        if updated == prev_updated:
-            continue
-
-        msg = latest_message(token, chat_id)
-        if not msg:
-            state.chats[chat_id] = {
-                "last_message_id": prev_mid,
-                "last_updated": updated,
-            }
-            continue
-        mid = msg.get("id")
-        if mid and mid != prev_mid and prev_mid is not None:
-            if msg.get("messageType") in (None, "message"):
-                title, body = format_toast(chat, msg)
-                notifier.show(title, body)
-        state.chats[chat_id] = {
-            "last_message_id": mid or prev_mid,
-            "last_updated": updated,
-        }
 
     if not state.initialized:
         state.initialized = True
@@ -248,12 +252,33 @@ def run_tray(rt: AppRuntime) -> None:
 def main() -> None:
     _setup_logging()
     ensure_config_exists()
-    cfg = load_config()
 
     import tkinter as tk
+    from tkinter import messagebox
 
     root = tk.Tk()
     root.withdraw()
+    try:
+        root.update_idletasks()
+    except tk.TclError:
+        pass
+
+    try:
+        cfg = load_config()
+    except ValueError as e:
+        messagebox.showerror(
+            "Notification Manager",
+            f"{e}\n\nFile:\n{config_path()}",
+        )
+        root.destroy()
+        return
+    except Exception as e:
+        messagebox.showerror(
+            "Notification Manager",
+            f"Could not load config:\n{e!r}\n\nFile:\n{config_path()}",
+        )
+        root.destroy()
+        return
 
     cache_path = token_cache_path()
     msal_app = build_msal_app(cfg["client_id"], cfg["tenant_id"], cache_path)

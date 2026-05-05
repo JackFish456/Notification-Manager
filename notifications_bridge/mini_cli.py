@@ -126,9 +126,10 @@ class MiniCliWindow:
             self._on_close()
             return
         if cmd == "clear":
-            self._out.configure(state="normal")
-            self._out.delete("1.0", END)
-            self._out.configure(state="disabled")
+            if self._out is not None:
+                self._out.configure(state="normal")
+                self._out.delete("1.0", END)
+                self._out.configure(state="disabled")
             return
         if cmd == "status":
             self._cmd_status()
