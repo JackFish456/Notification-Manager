@@ -55,7 +55,7 @@ Logs: `%LOCALAPPDATA%\GraphTeamsNotifyBridge\bridge.log`
 
 Tray:
 
-- **Left-click** the icon — **Customize** (opacity + how long banners stay); settings are saved to `config.json`  
+- **Left-click** the icon — **Customize** (opacity slider + dwell-time dropdown); settings are saved to `config.json`  
 - **Right-click** — full menu  
 
 Menu items:

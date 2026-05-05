@@ -10,6 +10,80 @@ from notifications_bridge.top_overlay import TopOverlayManager
 
 logger = logging.getLogger(__name__)
 
+# Preset dwell durations (seconds), aligned with config limits 1.5–120 s
+_DWELL_SEC_VALUES: tuple[float, ...] = (
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    8.0,
+    10.0,
+    12.0,
+    15.0,
+    20.0,
+    30.0,
+    45.0,
+    60.0,
+    90.0,
+    120.0,
+)
+
+
+def _format_dwell_option(sec: float) -> str:
+    if sec == int(sec):
+        return f"{int(sec)} s"
+    return f"{sec} s"
+
+
+_DWELL_OPTIONS: tuple[str, ...] = tuple(_format_dwell_option(s) for s in _DWELL_SEC_VALUES)
+
+
+def _nearest_dwell_index(sec: float) -> int:
+    best_i = 0
+    best_d = abs(_DWELL_SEC_VALUES[0] - sec)
+    for i, v in enumerate(_DWELL_SEC_VALUES):
+        d = abs(v - sec)
+        if d < best_d:
+            best_d = d
+            best_i = i
+    return best_i
+
+
+def _apply_dark_style(root: tk.Tk | tk.Toplevel) -> ttk.Style:
+    """Match top-overlay palette: dark panel, light text (internal display style)."""
+    bg = "#2d2d2d"
+    fg = "#f3f3f3"
+    sub = "#a8a8a8"
+    field = "#3d3d3d"
+    root.configure(bg=bg)
+
+    style = ttk.Style(root)
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        pass
+
+    style.configure("Display.TFrame", background=bg)
+    style.configure("Display.TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
+    style.configure("Display.TButton", background=field, foreground=fg, font=("Segoe UI", 10))
+    style.map(
+        "Display.TButton",
+        background=[("active", "#4a4a4a"), ("pressed", "#555555")],
+        foreground=[("disabled", sub)],
+    )
+    style.configure(
+        "Display.TCombobox",
+        fieldbackground=field,
+        background=field,
+        foreground=fg,
+        arrowcolor=fg,
+        font=("Segoe UI", 10),
+    )
+    style.map("Display.TCombobox", fieldbackground=[("readonly", field)])
+    return style
+
 
 class SettingsWindow:
     _instance: SettingsWindow | None = None
@@ -18,9 +92,8 @@ class SettingsWindow:
         self._rt = rt
         self._win: tk.Toplevel | None = None
         self._opacity_scale: tk.Scale | None = None
-        self._dwell_scale: tk.Scale | None = None
+        self._dwell_combo: ttk.Combobox | None = None
         self._opacity_label: ttk.Label | None = None
-        self._dwell_label: ttk.Label | None = None
         self._build()
 
     @classmethod
@@ -46,51 +119,42 @@ class SettingsWindow:
         dwell = float(cfg.get("overlay_dwell_ms", 5500)) / 1000.0
         if self._opacity_scale is not None:
             self._opacity_scale.set(op)
-        if self._dwell_scale is not None:
-            self._dwell_scale.set(dwell)
-        self._refresh_labels()
+        if self._dwell_combo is not None:
+            idx = _nearest_dwell_index(dwell)
+            self._dwell_combo.current(idx)
+        self._refresh_opacity_label()
 
-    def _refresh_labels(self) -> None:
+    def _refresh_opacity_label(self) -> None:
         if self._opacity_label and self._opacity_scale:
-            self._opacity_label.configure(text=f"{int(self._opacity_scale.get())}% opaque")
-        if self._dwell_label and self._dwell_scale:
-            self._dwell_label.configure(text=f"{float(self._dwell_scale.get()):.1f} s on screen")
+            self._opacity_label.configure(text=f"{int(self._opacity_scale.get())}%")
 
     def _build(self) -> None:
         rt = self._rt
         cfg = rt.cfg
 
         self._win = tk.Toplevel(rt.root)
-        self._win.title("Notification Manager — Customize")
-        self._win.geometry("440x280")
-        self._win.minsize(400, 240)
+        self._win.title("Customize")
+        self._win.geometry("360x200")
+        self._win.minsize(320, 180)
         try:
             self._win.attributes("-topmost", True)
         except tk.TclError:
             pass
 
-        outer = ttk.Frame(self._win, padding=12)
-        outer.pack(fill=tk.BOTH, expand=True)
+        _apply_dark_style(self._win)
 
-        ttk.Label(
-            outer,
-            text=(
-                "Tray: left-click the icon opens this window. Right-click opens the full menu. "
-                "Opacity applies to the custom top banner (use_top_overlay)."
-            ),
-            wraplength=400,
-            justify="left",
-        ).pack(anchor="w", pady=(0, 12))
+        outer = ttk.Frame(self._win, padding=16, style="Display.TFrame")
+        outer.pack(fill=tk.BOTH, expand=True)
 
         op0 = int(round(float(cfg.get("overlay_opacity", 0.96)) * 100))
         dwell0 = float(cfg.get("overlay_dwell_ms", 5500)) / 1000.0
 
-        f1 = ttk.Frame(outer)
-        f1.pack(fill=tk.X, pady=(0, 6))
-        row1 = ttk.Frame(f1)
+        f1 = ttk.Frame(outer, style="Display.TFrame")
+        f1.pack(fill=tk.X, pady=(0, 10))
+        row1 = ttk.Frame(f1, style="Display.TFrame")
         row1.pack(fill=tk.X)
-        ttk.Label(row1, text="Banner opacity").pack(side=tk.LEFT)
-        self._opacity_label = ttk.Label(row1, text="")
+        ttk.Label(row1, text="Opacity", style="Display.TLabel").pack(side=tk.LEFT)
+        self._opacity_label = ttk.Label(row1, text="", style="Display.TLabel")
         self._opacity_label.pack(side=tk.RIGHT)
         self._opacity_scale = tk.Scale(
             f1,
@@ -98,52 +162,58 @@ class SettingsWindow:
             to=100,
             orient=tk.HORIZONTAL,
             showvalue=0,
-            length=360,
-            command=lambda _v: self._refresh_labels(),
+            length=300,
+            bg="#2d2d2d",
+            fg="#f3f3f3",
+            troughcolor="#404040",
+            highlightthickness=0,
+            bd=0,
+            activebackground="#555555",
+            command=lambda _v: self._refresh_opacity_label(),
         )
         self._opacity_scale.set(op0)
-        self._opacity_scale.pack(fill=tk.X, pady=(4, 0))
+        self._opacity_scale.pack(fill=tk.X, pady=(6, 0))
 
-        f2 = ttk.Frame(outer)
-        f2.pack(fill=tk.X, pady=(12, 6))
-        row2 = ttk.Frame(f2)
+        f2 = ttk.Frame(outer, style="Display.TFrame")
+        f2.pack(fill=tk.X, pady=(8, 0))
+        row2 = ttk.Frame(f2, style="Display.TFrame")
         row2.pack(fill=tk.X)
-        ttk.Label(row2, text="Time on screen").pack(side=tk.LEFT)
-        self._dwell_label = ttk.Label(row2, text="")
-        self._dwell_label.pack(side=tk.RIGHT)
-        self._dwell_scale = tk.Scale(
-            f2,
-            from_=1.5,
-            to=120.0,
-            resolution=0.5,
-            orient=tk.HORIZONTAL,
-            showvalue=0,
-            length=360,
-            command=lambda _v: self._refresh_labels(),
+        ttk.Label(row2, text="Time on screen", style="Display.TLabel").pack(side=tk.LEFT)
+        self._dwell_combo = ttk.Combobox(
+            row2,
+            values=_DWELL_OPTIONS,
+            state="readonly",
+            width=12,
+            style="Display.TCombobox",
         )
-        self._dwell_scale.set(dwell0)
-        self._dwell_scale.pack(fill=tk.X, pady=(4, 0))
+        self._dwell_combo.pack(side=tk.RIGHT)
+        self._dwell_combo.current(_nearest_dwell_index(dwell0))
 
-        self._refresh_labels()
+        self._refresh_opacity_label()
 
-        btn_row = ttk.Frame(outer)
-        btn_row.pack(fill=tk.X, pady=(18, 0))
-        ttk.Button(btn_row, text="Save & apply", command=self._apply).pack(side=tk.RIGHT, padx=(6, 0))
-        ttk.Button(btn_row, text="Close", command=self._on_close).pack(side=tk.RIGHT)
+        btn_row = ttk.Frame(outer, style="Display.TFrame")
+        btn_row.pack(fill=tk.X, pady=(20, 0))
+        ttk.Button(btn_row, text="Apply", command=self._apply, style="Display.TButton").pack(
+            side=tk.RIGHT, padx=(8, 0)
+        )
+        ttk.Button(btn_row, text="Close", command=self._on_close, style="Display.TButton").pack(
+            side=tk.RIGHT
+        )
 
         self._win.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _apply(self) -> None:
-        if self._opacity_scale is None or self._dwell_scale is None:
+        if self._opacity_scale is None or self._dwell_combo is None:
             return
         try:
             op_pct = float(self._opacity_scale.get())
         except tk.TclError:
             op_pct = 96.0
-        try:
-            dwell_sec = float(self._dwell_scale.get())
-        except tk.TclError:
-            dwell_sec = 5.5
+
+        idx = self._dwell_combo.current()
+        if idx < 0:
+            idx = _nearest_dwell_index(5.5)
+        dwell_sec = _DWELL_SEC_VALUES[idx]
 
         alpha = max(0.35, min(1.0, op_pct / 100.0))
         dwell_ms = max(1500, min(int(round(dwell_sec * 1000)), 120_000))
