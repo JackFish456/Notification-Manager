@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 import subprocess
 import threading
 import time
 import webbrowser
+from pathlib import Path
+from typing import Any
 
 import pystray
 import requests
@@ -68,7 +69,7 @@ def _open_config() -> None:
         subprocess.run(["notepad", p], check=False)
 
 
-def _poll_cycle(app, cache_path, toast: ToastService, state_file: Path) -> None:
+def _poll_cycle(app, cache_path, notifier: Any, state_file: Path) -> None:
     try:
         token = acquire_token(app, cache_path, interactive=False)
     except RuntimeError:
@@ -119,7 +120,7 @@ def _poll_cycle(app, cache_path, toast: ToastService, state_file: Path) -> None:
         if mid and mid != prev_mid and prev_mid is not None:
             if msg.get("messageType") in (None, "message"):
                 title, body = format_toast(chat, msg)
-                toast.show(title, body)
+                notifier.show(title, body)
         state.chats[chat_id] = {
             "last_message_id": mid or prev_mid,
             "last_updated": updated,
@@ -131,11 +132,10 @@ def _poll_cycle(app, cache_path, toast: ToastService, state_file: Path) -> None:
     state.save(state_file)
 
 
-def _poll_loop(app, cache_path, toast_app_id: str, interval: int) -> None:
-    toast = ToastService(toast_app_id)
+def _poll_loop(app, cache_path, notifier: Any, interval: int) -> None:
     while not _stop.is_set():
         try:
-            _poll_cycle(app, cache_path, toast, state_file_path())
+            _poll_cycle(app, cache_path, notifier, state_file_path())
         except requests.HTTPError as e:
             resp = e.response
             if resp is not None and resp.status_code == 401:
@@ -150,28 +150,30 @@ def _poll_loop(app, cache_path, toast_app_id: str, interval: int) -> None:
             time.sleep(1)
 
 
-def _start_background_poll(app, cache_path, toast_app_id: str, interval: int) -> None:
+def _start_background_poll(app, cache_path, notifier: Any, interval: int) -> None:
     global _poll_thread
     if _poll_thread and _poll_thread.is_alive():
         return
 
     def run() -> None:
-        _poll_loop(app, cache_path, toast_app_id, interval)
+        _poll_loop(app, cache_path, notifier, interval)
 
     _poll_thread = threading.Thread(target=run, name="graph-poll", daemon=True)
     _poll_thread.start()
 
 
-def run_tray() -> None:
-    _setup_logging()
-    ensure_config_exists()
-    cfg = load_config()
+def run_tray(cfg: dict, notifier: Any, tk_root: Any | None) -> None:
     cache_path = token_cache_path()
     msal_app = build_msal_app(cfg["client_id"], cfg["tenant_id"], cache_path)
 
     def on_quit(icon, _item) -> None:
         _stop.set()
         icon.stop()
+        if tk_root is not None:
+            try:
+                tk_root.after(0, tk_root.quit)
+            except Exception:
+                logger.exception("Failed to stop Tk root")
 
     def on_sign_out(_icon, _item) -> None:
         try:
@@ -215,7 +217,7 @@ def run_tray() -> None:
         _start_background_poll(
             msal_app,
             cache_path,
-            cfg["toast_app_id"],
+            notifier,
             cfg["poll_interval_seconds"],
         )
         icon.visible = True
@@ -224,4 +226,32 @@ def run_tray() -> None:
 
 
 def main() -> None:
-    run_tray()
+    _setup_logging()
+    ensure_config_exists()
+    cfg = load_config()
+
+    if cfg["use_top_overlay"]:
+        import tkinter as tk
+
+        from notifications_bridge.top_overlay import TopOverlayManager
+
+        root = tk.Tk()
+        root.withdraw()
+        notifier = TopOverlayManager(
+            root,
+            width=cfg["overlay_width"],
+            height=cfg["overlay_height"],
+            top_margin=cfg["overlay_top_margin"],
+            dwell_ms=cfg["overlay_dwell_ms"],
+            enter_ms=cfg["overlay_enter_ms"],
+            exit_ms=cfg["overlay_exit_ms"],
+        )
+        threading.Thread(
+            target=lambda: run_tray(cfg, notifier, root),
+            daemon=True,
+            name="tray",
+        ).start()
+        root.mainloop()
+    else:
+        notifier = ToastService(cfg["toast_app_id"])
+        run_tray(cfg, notifier, None)

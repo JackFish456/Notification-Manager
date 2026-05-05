@@ -1,6 +1,6 @@
 # Graph Teams notify bridge
 
-Small **Windows tray app** that signs into your **Microsoft work account**, reads **Teams chats** via **Microsoft Graph** (`Chat.Read`), and raises **Windows toast notifications** for new chat messages. Those toasts are normal Windows notifications, so tools like **TopNotify** can reposition them like any other app.
+Small **Windows tray app** that signs into your **Microsoft work account**, reads **Teams chats** via **Microsoft Graph** (`Chat.Read`), and shows **alerts** for new chat messages. You can show either **built-in Windows toasts** (so tools like **TopNotify** can reposition them) or a **custom top-of-screen card** that animates **down into place** and **up off the screen** (Windows does not expose swipe direction for real shell toasts, so this is the way to get vertical motion).
 
 This is **not** an official Kiewit or Microsoft product. Use only if your **IT and security policies** allow it.
 
@@ -31,6 +31,12 @@ Copy the **Application (client) ID** into `config.json`.
    - **`tenant_id`**: Your directory tenant ID, or use **`organizations`** for any work/school account in the commercial cloud (adjust if you use GCC/GCCH).
    - **`poll_interval_seconds`**: How often to poll Graph (minimum 15; default 60).
    - **`toast_app_id`**: Label shown for toasts; keep it stable so Windows groups them consistently.
+   - **`use_top_overlay`**: `true` = draw our own **top-centered** notification (~toast-sized) with **slide-down enter** and **slide-up exit**; `false` = use **Windows-Toasts** (shell toasts).
+   - **`overlay_width`**, **`overlay_height`**, **`overlay_top_margin`**: layout for the overlay card (pixels).
+   - **`overlay_dwell_seconds`**: how long the card stays before sliding away.
+   - **`overlay_enter_ms`**, **`overlay_exit_ms`**: animation duration for enter/exit.
+
+Overlay mode uses **Tkinter** on the **main UI thread** (required on Windows) while the tray icon runs on a background thread. Cards are centered on the **primary** monitor’s width.
 
 ## Run
 

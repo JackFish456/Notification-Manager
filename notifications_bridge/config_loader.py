@@ -35,9 +35,26 @@ def load_config() -> dict:
     poll = int(data.get("poll_interval_seconds") or 60)
     poll = max(15, min(poll, 600))
     toast_app_id = (data.get("toast_app_id") or "GraphTeamsNotifyBridge").strip()
+    use_top_overlay = bool(data.get("use_top_overlay", False))
+    overlay_width = int(data.get("overlay_width") or 360)
+    overlay_width = max(280, min(overlay_width, 520))
+    overlay_height = int(data.get("overlay_height") or 92)
+    overlay_height = max(64, min(overlay_height, 200))
+    overlay_top_margin = int(data.get("overlay_top_margin") or 10)
+    overlay_dwell_ms = int(float(data.get("overlay_dwell_seconds") or 5.5) * 1000)
+    overlay_dwell_ms = max(1500, min(overlay_dwell_ms, 60_000))
+    overlay_enter_ms = int(data.get("overlay_enter_ms") or 220)
+    overlay_exit_ms = int(data.get("overlay_exit_ms") or 260)
     return {
         "client_id": client_id,
         "tenant_id": tenant_id,
         "poll_interval_seconds": poll,
         "toast_app_id": toast_app_id,
+        "use_top_overlay": use_top_overlay,
+        "overlay_width": overlay_width,
+        "overlay_height": overlay_height,
+        "overlay_top_margin": overlay_top_margin,
+        "overlay_dwell_ms": overlay_dwell_ms,
+        "overlay_enter_ms": overlay_enter_ms,
+        "overlay_exit_ms": overlay_exit_ms,
     }
